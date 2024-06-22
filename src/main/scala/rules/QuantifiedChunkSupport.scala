@@ -25,6 +25,7 @@ import viper.silicon.state.terms.utils.consumeExactRead
 import viper.silicon.supporters.functions.NoopFunctionRecorder
 import viper.silicon.utils.notNothing.NotNothing
 import viper.silicon.verifier.Verifier
+import viper.silver.ast.{Field, Location, MagicWand, MagicWandOp, Predicate}
 import viper.silver.reporter.InternalWarningMessage
 
 case class InverseFunctions(condition: Term,
@@ -971,6 +972,12 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
                            : VerificationResult = {
 
     val (sm, smValueDef) = quantifiedChunkSupporter.singletonSnapshotMap(s, resource, tArgs, tSnap, v)
+    resource match {
+      case Field(name, typ) =>
+        val singleton = Singleton(name, tSnap, tArgs.head)
+        v.decider.assumeDefinition(BuiltinEquals(singleton, sm))
+      case _ => {}
+    }
     v.decider.prover.comment("Definitional axioms for singleton-SM's value")
     val definitionalAxiomMark = v.decider.setPathConditionMark()
     v.decider.assumeDefinition(smValueDef)

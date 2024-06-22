@@ -12,4 +12,7 @@
 (declare-fun $FVF.after_$FLD$ ($FVF<$FLD$> $FVF<$FLD$>) Bool)
 (declare-fun $FVF.loc_$FLD$ ($S$ $Ref) Bool)
 (declare-fun $FVF.perm_$FLD$ ($FPM $Ref) $Perm)
+(declare-fun $FVF.singleton_$FLD$ ($Ref $S$) $FVF<$FLD$>)
+(declare-fun $FVF.lookup_singleton_$FLD$ ($FVF<$FLD$>) $S$)
+(declare-fun $FVF.domain_singleton_$FLD$ ($FVF<$FLD$>) $Ref)
 (declare-const $fvfTOP_$FLD$ $FVF<$FLD$>)

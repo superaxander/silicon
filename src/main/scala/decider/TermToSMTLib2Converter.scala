@@ -260,6 +260,7 @@ class TermToSMTLib2Converter
     case m: MapUpdate => renderApp("Map_update", Seq(m.base, m.key, m.value), m.sort)
 
     /* Quantified Permissions */
+    case Singleton(field, value, rcv) => parens(text("$FVF.singleton_") <> field <+> render(rcv) <+> render(value))
 
     case Domain(id, fvf) => parens(text("$FVF.domain_") <> id <+> render(fvf))
 

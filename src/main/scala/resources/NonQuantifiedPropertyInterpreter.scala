@@ -93,14 +93,36 @@ class NonQuantifiedPropertyInterpreter(heap: Iterable[Chunk], verifier: Verifier
     case c: QuantifiedBasicChunk => c.singletonArguments.get
   }
 
+  private def findNeqs(term: Term): Set[(Term, Term)] = term match {
+    case terms.And(terms) => terms.flatMap(findNeqs).toSet
+    case terms.Not(terms.BuiltinEquals(l,r)) => neqs(l, r)
+    case _ => Set()
+  }
+
+  private def neqs(l: Term, r: Term): Set[(Term, Term)] = Set((l, r), (r, l)) ++ ((l, r) match {
+    case (terms.App(f0, Seq(a0)), terms.App(f1, Seq(a1))) if f0 == f1 =>
+      neqs(a0, a1)
+    case (terms.Lookup(field0, fvf0, at0), terms.Lookup(field1, fvf1, at1)) if field0 == field1 => neqs(at0, at1)
+    case _ => Set()
+  })
+
+  private def isTrivial(t: Term, neqs: Set[(Term, Term)]): Boolean = t match {
+    case terms.And(terms) => terms.forall(isTrivial(_, neqs))
+    case terms.Not(terms.BuiltinEquals(l, r)) if neqs.contains((l, r)) => true
+    case _ => false
+  }
+
   override protected def buildCheck[K <: IteUsableKind]
                                    (condition: PropertyExpression[kinds.Boolean],
                                     thenDo: PropertyExpression[K],
                                     otherwise: PropertyExpression[K],
                                     info: Info) = {
     val conditionTerm = buildPathCondition(condition, info)
-    if (verifier.decider.check(conditionTerm, Verifier.config.checkTimeout())) {
-      buildPathCondition(thenDo, info)
+    val thenDoTerm = buildPathCondition(thenDo, info)
+    if (isTrivial(thenDoTerm, findNeqs(conditionTerm))) {
+      thenDoTerm
+    } else if (verifier.decider.check(conditionTerm, Verifier.config.checkTimeout())) {
+      thenDoTerm
     } else {
       buildPathCondition(otherwise, info)
     }

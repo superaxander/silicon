@@ -1124,6 +1124,7 @@ class BuiltinEquals private[terms] (val p0: Term, val p1: Term) extends Conditio
 
 object BuiltinEquals extends CondFlyweightFactory[(Term, Term), BooleanTerm, BuiltinEquals] {
   override def apply(v0: (Term, Term)) = v0 match {
+    case (e0, e1) if e0 == e1 => True
     case (p0: PermLiteral, p1: PermLiteral) =>
       // NOTE: The else-case (False) is only justified because permission literals are stored in a normal form
       // such that two literals are semantically equivalent iff they are syntactically equivalent.
@@ -2203,6 +2204,16 @@ object Second extends CondFlyweightTermFactory[Term, Second] {
 }
 
 /* Quantified permissions */
+class Singleton(val field: String, val value: Term, val rcv: Term) extends Term with ConditionalFlyweight[(String, Term, Term), Singleton] {
+  utils.assertSort(rcv, "receiver", sorts.Ref)
+  override val sort: Sort = sorts.FieldValueFunction(value.sort, field)
+
+  override val equalityDefiningMembers: (String, Term, Term) = (field, value, rcv)
+}
+
+object Singleton extends PreciseCondFlyweightFactory[(String, Term, Term), Singleton] {
+  override def actualCreate(args: (String, Term, Term)): Singleton = new Singleton(args._1, args._2, args._3)
+}
 
 class Lookup(val field: String, val fvf: Term, val at: Term) extends Term with ConditionalFlyweight[(String, Term, Term), Lookup] {
   utils.assertSort(fvf, "field value function", "FieldValueFunction", _.isInstanceOf[sorts.FieldValueFunction])

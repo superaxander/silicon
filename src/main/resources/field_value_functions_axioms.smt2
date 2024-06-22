@@ -36,3 +36,12 @@
 (assert (forall ((r $Ref) (f $S$)) (!
     (= ($FVF.loc_$FLD$ f r) true)
     :pattern (($FVF.loc_$FLD$ f r)))))
+
+(assert (forall ((r $Ref) (v $S$)) (!
+    (and
+        (= v ($FVF.lookup_singleton_$FLD$ ($FVF.singleton_$FLD$ r v) ) )
+        (= r ($FVF.domain_singleton_$FLD$ ($FVF.singleton_$FLD$ r v) ) ))
+    :pattern (($FVF.singleton_$FLD$ r v))
+    :qid |qp.$FVF<$FLD$>-singleton-inj|
+    )))
+
