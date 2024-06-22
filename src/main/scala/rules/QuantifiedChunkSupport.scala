@@ -973,10 +973,10 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
 
     val (sm, smValueDef) = quantifiedChunkSupporter.singletonSnapshotMap(s, resource, tArgs, tSnap, v)
     resource match {
-      case Field(name, typ) =>
+      case Field(name, _) =>
         val singleton = Singleton(name, tSnap, tArgs.head)
         v.decider.assumeDefinition(BuiltinEquals(singleton, sm))
-      case _ => {}
+      case _ =>
     }
     v.decider.prover.comment("Definitional axioms for singleton-SM's value")
     val definitionalAxiomMark = v.decider.setPathConditionMark()

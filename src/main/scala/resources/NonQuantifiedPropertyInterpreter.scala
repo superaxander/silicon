@@ -120,7 +120,8 @@ class NonQuantifiedPropertyInterpreter(heap: Iterable[Chunk], verifier: Verifier
     val conditionTerm = buildPathCondition(condition, info)
     val thenDoTerm = buildPathCondition(thenDo, info)
     if (isTrivial(thenDoTerm, findNeqs(conditionTerm))) {
-      thenDoTerm
+      // Don't need to explicitly explain this implication to Z3
+      terms.True
     } else if (verifier.decider.check(conditionTerm, Verifier.config.checkTimeout())) {
       thenDoTerm
     } else {
