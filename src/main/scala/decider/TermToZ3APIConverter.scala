@@ -401,6 +401,7 @@ class TermToZ3APIConverter
       case m: MapUpdate => createApp("Map_update", Seq(m.base, m.key, m.value), m.sort)
 
       /* Quantified Permissions */
+      case Singleton(field, value, rcv) => createApp("$FVF.singleton_" + field, Seq(rcv, value), term.sort)
 
       case Domain(id, fvf) => createApp("$FVF.domain_" + id, Seq(fvf), term.sort)
 
