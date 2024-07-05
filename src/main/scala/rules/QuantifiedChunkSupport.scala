@@ -28,6 +28,8 @@ import viper.silicon.verifier.Verifier
 import viper.silver.ast.{Field, Location, MagicWand, MagicWandOp, Predicate}
 import viper.silver.reporter.InternalWarningMessage
 
+import scala.annotation.tailrec
+
 case class InverseFunctions(condition: Term,
                             invertibles: Seq[Term],
                             additionalArguments: Vector[Var],
@@ -1776,6 +1778,21 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
       matchingChunks ++ otherChunks
     }
 
+  private def equalModuloVar(receiverTerms: Seq[Term], quantVars: Seq[Var], chunkTerms: Seq[Term], v: Verifier): Boolean = {
+    receiverTerms.zip(chunkTerms).forall{case (receiver, chunk) => equalModuloVar(receiver, quantVars, chunk, v)}
+  }
+
+  @tailrec
+  private def equalModuloVar(receiverTerm: Term, quantVars: Seq[Var], chunkTerm: Term, v: Verifier): Boolean = {
+    (receiverTerm, chunkTerm) match {
+      case (l, r) if l == r => true
+      case (App(f1, l), App(f2, r)) if f1 == f2 => equalModuloVar(l, quantVars, r, v)
+      case (Lookup(field1, _, at1), Lookup(field2, _, at2)) if field1 == field2 => equalModuloVar(at1, quantVars, at2, v)
+      case (v@Var(_), _) if quantVars.contains(v) => true
+      case (l, r) => v.decider.check(Equals(l, r), Verifier.config.checkTimeout())
+    }
+  }
+
   def qpAppChunkOrderHeuristics(receiverTerms: Seq[Term], quantVars: Seq[Var], hints: Seq[Term], v: Verifier)
                                : Seq[QuantifiedBasicChunk] => Seq[QuantifiedBasicChunk] = {
     // Heuristics that looks for quantified chunks that have the same shape (as in, the same number and types of
@@ -1807,7 +1824,8 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
                 false
               }
             })
-          case _ => false
+          case _ =>
+            c.singletonArguments.exists(equalModuloVar(receiverTerms, quantVars, _, v))
         }
       })
       if (matches.nonEmpty) {
