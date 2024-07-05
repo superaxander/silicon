@@ -161,6 +161,11 @@ class Config(args: Seq[String]) extends SilFrontendConfig(args, "Silicon") {
     noshort = true
   )
 
+  val axiomatizeSingletonSnapshot: ScallopOption[Boolean] = opt[Boolean]("axiomatizeSingletonSnapshot",
+    descr = "Axiomatise that the snapshot map of a singleton quantified heap chunk is a singleton",
+    default  = Some(false),
+    noshort = true
+  )
   val includeMethods: ScallopOption[String] = opt[String]("includeMethods",
     descr = "Include methods in verification (default: '*'). Wildcard characters are '?' and '*'. ",
     default = Some(".*"),

@@ -650,7 +650,7 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
     val smValueDef = BuiltinEquals(ResourceLookup(resource, sm, arguments, s.program), value)
 
     val singleton = resource match {
-      case Field(name, _) =>
+      case Field(name, _) if Verifier.config.axiomatizeSingletonSnapshot() =>
         val singleton = Singleton(name, value, arguments.head)
         BuiltinEquals(singleton, sm)
       case _ => terms.True

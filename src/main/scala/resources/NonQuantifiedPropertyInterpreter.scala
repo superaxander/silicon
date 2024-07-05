@@ -102,7 +102,7 @@ class NonQuantifiedPropertyInterpreter(heap: Iterable[Chunk], verifier: Verifier
   private def neqs(l: Term, r: Term): Set[(Term, Term)] = Set((l, r), (r, l)) ++ ((l, r) match {
     case (terms.App(f0, Seq(a0)), terms.App(f1, Seq(a1))) if f0 == f1 =>
       neqs(a0, a1)
-    case (terms.Lookup(field0, fvf0, at0), terms.Lookup(field1, fvf1, at1)) if field0 == field1 => neqs(at0, at1)
+    case (terms.Lookup(field0, fvf0, at0), terms.Lookup(field1, fvf1, at1)) if field0 == field1 && (Verifier.config.axiomatizeSingletonSnapshot() || fvf0 == fvf1) => neqs(at0, at1)
     case _ => Set()
   })
 
@@ -148,18 +148,25 @@ class NonQuantifiedPropertyInterpreter(heap: Iterable[Chunk], verifier: Verifier
                            body: PropertyExpression[kinds.Boolean],
                            info: Info)
                           : Term = {
-    val builder: GeneralChunk => Term = chunkVariables match {
-      case c +: Seq() => chunk => buildPathCondition(body, info.addMapping(c, chunk))
-      case c +: tail => chunk => buildForEach(chunks, tail, body, info.addMapping(c, chunk))
-    }
-    terms.And(chunks.flatMap { chunk =>
-      // check that only distinct tuples are handled
-      // TODO: Is it possible to get this behavior without having to check every tuple?
-      if (!info.pm.values.exists(chunk eq _)) {
-        Some(builder(chunk))
-      } else {
-        None
-      }
-    })
+    terms.And(chunks.toSeq.combinations(chunkVariables.length).map {
+      chs =>
+        val mapped = chunkVariables.zipWithIndex.foldLeft(info) {
+          case (inf, (c, i)) => inf.addMapping(c, chs(i))
+        }
+        buildPathCondition(body, mapped)
+    }.toSeq)
+//    val builder: GeneralChunk => Term = chunkVariables match {
+//      case c +: Seq() => chunk => buildPathCondition(body, info.addMapping(c, chunk))
+//      case c +: tail => chunk => buildForEach(chunks, tail, body, info.addMapping(c, chunk))
+//    }
+//    terms.And(chunks.flatMap { chunk =>
+//      // check that only distinct tuples are handled
+//      // TODO: Is it possible to get this behavior without having to check every tuple?
+//      if (!info.pm.values.exists(chunk eq _)) {
+//        Some(builder(chunk))
+//      } else {
+//        None
+//      }
+//    })
   }
 }

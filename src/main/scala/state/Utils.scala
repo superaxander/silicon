@@ -91,6 +91,7 @@ package object utils {
     case PredicatePermLookup(_, pm, args) => Seq(pm) ++ args
     case FieldTrigger(_, fvf, at) => fvf :: at :: Nil
     case PredicateTrigger(_, psf, args) => psf +: args
+    case Singleton(_, fvf, rcv) => fvf :: rcv :: Nil
 
   }
 
@@ -208,6 +209,7 @@ package object utils {
       case Lookup(f, fvf, at) => Lookup(f, go(fvf), go(at))
       case PermLookup(field, pm, at) => PermLookup(field, go(pm), go(at))
       case FieldTrigger(f, fvf, at) => FieldTrigger(f, go(fvf), go(at))
+      case Singleton(f, fvf, rcv) => Singleton(f, go(fvf), go(rcv))
 
       case PredicateDomain(p, psf) => PredicateDomain(p, go(psf))
       case PredicateLookup(p, psf, args) => PredicateLookup(p, go(psf), args map go)
