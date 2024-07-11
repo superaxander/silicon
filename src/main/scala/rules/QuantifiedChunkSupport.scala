@@ -1384,6 +1384,9 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
       if (Verifier.config.disableChunkOrderHeuristics()) relevantChunks
       else chunkOrderHeuristic(relevantChunks)
 
+    val chunkOrderComment = new CommentRecord(candidates.mkString("Chunk order: [\n    ", "\n    ", "\n]"), s, v.decider.pcs)
+    v.symbExLog.closeScope(v.symbExLog.openScope(chunkOrderComment))
+
     val constrainPermissions = !consumeExactRead(perms, s.constrainableARPs)
 
     var remainingChunks = Vector.empty[QuantifiedBasicChunk]
@@ -1415,6 +1418,8 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
         currentFunctionRecorder = currentFunctionRecorder.recordFreshMacro(permsTakenDecl)
         val permsTakenApp = App(permsTakenMacro, permsTakenArgs)
         v.symbExLog.addMacro(permsTakenApp, permsTakenBody)
+        val macroComment = new CommentRecord("Macro: " + permsTakenBody + ", " + permsTakenArgs, s, v.decider.pcs)
+        v.symbExLog.closeScope(v.symbExLog.openScope(macroComment))
         permsTakenApp
       } else {
         Ite(condition, PermMin(permsProvided, permsNeeded), NoPerm)
@@ -1447,10 +1452,13 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
         } else {
           v.decider.prover.comment(s"Chunk depleted?")
           val chunkDepleted = v.decider.check(depletedCheck, Verifier.config.splitTimeout())
-
+          val depletedComment = new CommentRecord("Chunk depleted: "+chunkDepleted, s, v.decider.pcs)
+          v.symbExLog.closeScope(v.symbExLog.openScope(depletedComment))
           if (!chunkDepleted) {
             val unusedCheck = Forall(codomainQVars, ithPTaken === NoPerm, Nil)
             val chunkUnused = v.decider.check(unusedCheck, Verifier.config.checkTimeout())
+            val unusedComment = new CommentRecord("Chunk unused: "+chunkUnused, s, v.decider.pcs)
+            v.symbExLog.closeScope(v.symbExLog.openScope(unusedComment))
             if (chunkUnused) {
               remainingChunks = remainingChunks :+ ithChunk
             } else {
@@ -1790,6 +1798,67 @@ object quantifiedChunkSupporter extends QuantifiedChunkSupport {
       case (Lookup(field1, _, at1), Lookup(field2, _, at2)) if field1 == field2 => equalModuloVar(at1, quantVars, at2, v)
       case (v@Var(_), _) if quantVars.contains(v) => true
       case (l, r) => v.decider.check(Equals(l, r), Verifier.config.checkTimeout())
+    }
+  }
+
+  def findQPChunk(chunks: Iterable[Chunk], chunk: QuantifiedChunk, v: Verifier): Option[QuantifiedChunk] = {
+    val lr = chunk match {
+      case qfc: QuantifiedFieldChunk if qfc.invs.isDefined =>
+        Left(qfc.invs.get.invertibles, qfc.invs.get.qvarsToInverses.keys.toSeq, qfc.invs.get.condition)
+      case qfc: QuantifiedFieldChunk if qfc.singletonRcvr.isDefined && qfc.singletonArguments.isDefined =>
+        Right(qfc.singletonArguments.get)
+      case qpc: QuantifiedPredicateChunk if qpc.invs.isDefined =>
+        Left(qpc.invs.get.invertibles, qpc.invs.get.qvarsToInverses.keys.toSeq, qpc.invs.get.condition)
+//      case qwc: QuantifiedMagicWandChunk if qwc.invs.isDefined =>
+//        (qwc.invs.get.invertibles, qwc.invs.get.qvarsToInverses.keys.toSeq, qwc.invs.get.condition)
+      case _ => return None // TODO: Singleton heap chunks and magic wands
+    }
+    val relevantChunks: Iterable[QuantifiedBasicChunk] = chunks.flatMap {
+      case ch: QuantifiedBasicChunk if ch.id == chunk.id => Some(ch)
+      case _ => None
+    }
+
+    val (receiverTerms, quantVars, cond) = lr match {
+      case Left(tuple) => tuple
+      case Right(singletonArguments) => {
+        return relevantChunks.find { ch =>
+          val chunkInfo = ch match {
+            case qfc: QuantifiedFieldChunk if qfc.singletonRcvr.isDefined && qfc.singletonArguments.isDefined =>
+              Some(qfc.singletonArguments.get)
+            case _ => None
+          }
+          chunkInfo match {
+            case Some(cSingletonArguments) =>
+              val result = v.decider.check(And(singletonArguments.zip(cSingletonArguments).map { case (a, b) => a === b }), Verifier.config.checkTimeout())
+              result
+            case _ => false
+          }
+        }
+      }
+    }
+    relevantChunks.find { ch =>
+      val chunkInfo = ch match {
+        case qfc: QuantifiedFieldChunk if qfc.invs.isDefined =>
+          Some(qfc.invs.get.invertibles, qfc.invs.get.qvarsToInverses.keys.toSeq, qfc.invs.get.condition)
+        case qpc: QuantifiedPredicateChunk if qpc.invs.isDefined =>
+          Some(qpc.invs.get.invertibles, qpc.invs.get.qvarsToInverses.keys.toSeq, qpc.invs.get.condition)
+//        case qwc: QuantifiedMagicWandChunk if qwc.invs.isDefined =>
+//          Some(qwc.invs.get.invertibles, qwc.invs.get.qvarsToInverses.keys.toSeq, qwc.invs.get.condition)
+        case _ => None
+      }
+      chunkInfo match {
+        case Some((cInvertibles, cQvars, cCond)) =>
+          val condReplaced = cCond.replace(cQvars, quantVars)
+          receiverTerms.zip(cInvertibles).forall(p => {
+            if (cQvars.length == quantVars.length && cQvars.zip(quantVars).forall(vars => vars._1.sort == vars._2.sort)) {
+              val secondReplaced = p._2.replace(cQvars, quantVars)
+              v.decider.check(SimplifyingForall(quantVars, And(Seq(Equals(cond, condReplaced), p._1 === secondReplaced)), Seq()), Verifier.config.checkTimeout())
+            } else {
+              false
+            }
+          })
+        case _ => false // TODO: Singleton quantified field chunks?
+      }
     }
   }
 

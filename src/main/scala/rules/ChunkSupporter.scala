@@ -42,18 +42,18 @@ trait ChunkSupportRules extends SymbolicExecutionRules {
             (Q: (State, Heap, Term, Verifier) => VerificationResult)
             : VerificationResult
 
-  def findChunk[CH <: NonQuantifiedChunk: ClassTag]
+  def findNonQPChunk[CH <: NonQuantifiedChunk: ClassTag]
                (chunks: Iterable[Chunk],
                 id: ChunkIdentifer,
                 args: Iterable[Term],
                 v: Verifier)
                : Option[CH]
 
-  def findMatchingChunk[CH <: NonQuantifiedChunk: ClassTag]
+  def findMatchingChunk
                        (chunks: Iterable[Chunk],
-                        chunk: CH,
+                        chunk: Chunk,
                         v: Verifier)
-                       : Option[CH]
+                       : Option[Chunk]
 
   def findChunksWithID[CH <: NonQuantifiedChunk: ClassTag]
                       (chunks: Iterable[Chunk],
@@ -151,7 +151,7 @@ object chunkSupporter extends ChunkSupportRules {
       v.decider.assume(interpreter.buildPathConditionsForChunk(chunk, resource.instanceProperties))
     }
 
-    findChunk[NonQuantifiedChunk](h.values, id, args, v) match {
+    findNonQPChunk[NonQuantifiedChunk](h.values, id, args, v) match {
       case Some(ch) =>
         if (consumeExact) {
           val toTake = PermMin(ch.perm, perms)
@@ -222,7 +222,7 @@ object chunkSupporter extends ChunkSupportRules {
                           : VerificationResult = {
 
     val id = ChunkIdentifier(resource, s.program)
-    val findRes = findChunk[NonQuantifiedChunk](h.values, id, args, v)
+    val findRes = findNonQPChunk[NonQuantifiedChunk](h.values, id, args, v)
     findRes match {
       case Some(ch) if v.decider.check(IsPositive(ch.perm), Verifier.config.checkTimeout()) =>
         Q(s, ch.snap, v)
@@ -233,7 +233,7 @@ object chunkSupporter extends ChunkSupportRules {
     }
   }
 
-  def findChunk[CH <: NonQuantifiedChunk: ClassTag]
+  def findNonQPChunk[CH <: NonQuantifiedChunk: ClassTag]
                (chunks: Iterable[Chunk],
                 id: ChunkIdentifer,
                 args: Iterable[Term],
@@ -243,12 +243,17 @@ object chunkSupporter extends ChunkSupportRules {
     findChunkLiterally(relevantChunks, args) orElse findChunkWithProver(relevantChunks, args, v)
   }
 
-  def findMatchingChunk[CH <: NonQuantifiedChunk: ClassTag]
-                       (chunks: Iterable[Chunk], chunk: CH, v: Verifier): Option[CH] = {
-    findChunk[CH](chunks, chunk.id, chunk.args, v)
+  def findMatchingChunk
+                       (chunks: Iterable[Chunk], chunk: Chunk, v: Verifier): Option[Chunk] = {
+    chunk match {
+      case chunk: BasicChunk =>
+        findNonQPChunk[BasicChunk](chunks, chunk.id, chunk.args, v)
+      case chunk: QuantifiedChunk => quantifiedChunkSupporter.findQPChunk(chunks, chunk, v)
+      case _ => None
+    }
   }
 
-  def findChunksWithID[CH <: NonQuantifiedChunk: ClassTag](chunks: Iterable[Chunk], id: ChunkIdentifer): Iterable[CH] = {
+  def findChunksWithID[CH <: GeneralChunk: ClassTag](chunks: Iterable[Chunk], id: ChunkIdentifer): Iterable[CH] = {
     chunks.flatMap {
       case c: CH if id == c.id => Some(c)
       case _ => None
