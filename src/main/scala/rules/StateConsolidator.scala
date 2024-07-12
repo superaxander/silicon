@@ -55,7 +55,7 @@ class MinimalStateConsolidator extends StateConsolidationRules {
   */
 class DefaultStateConsolidator(protected val config: Config) extends StateConsolidationRules {
   def consolidate(s: State, v: Verifier): State = {
-    val comLog = new CommentRecord("state consolidation", s, v.decider.pcs)
+    val comLog = new CommentRecord("state consolidation: " + s.h.values, s, v.decider.pcs)
     val sepIdentifier = v.symbExLog.openScope(comLog)
     v.decider.prover.comment("[state consolidation]")
     v.decider.prover.saturate(config.proverSaturationTimeouts.beforeIteration)
@@ -64,13 +64,11 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
 
     val (functionRecorderAfterHeapMerging, mergedHeaps) =
       initialHeaps.foldLeft((s.functionRecorder, Nil: List[Heap])) { case ((fr, hs), h) =>
-        val (nonQuantifiedChunks, otherChunks) = partition(h)
-
         var continue = false
 
-        var mergedChunks: Seq[NonQuantifiedChunk] = Nil
-        var destChunks: Seq[NonQuantifiedChunk] = Nil
-        var newChunks: Seq[NonQuantifiedChunk] = nonQuantifiedChunks
+        var mergedChunks: Seq[Chunk] = Nil
+        var destChunks: Seq[Chunk] = Nil
+        var newChunks: Seq[Chunk] = h.values.toSeq
         var functionRecorder: FunctionRecorder = fr
 
         var fixedPointRound: Int = 0
@@ -92,10 +90,10 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
           fixedPointRound = fixedPointRound + 1
         } while (continue)
 
-        val allChunks = mergedChunks ++ otherChunks
-        val interpreter = new NonQuantifiedPropertyInterpreter(allChunks, v)
 
-        mergedChunks foreach { ch =>
+        val interpreter = new NonQuantifiedPropertyInterpreter(mergedChunks, v)
+
+        mergedChunks.filter(_.isInstanceOf[BasicChunk]) foreach { case ch: BasicChunk =>
           val resource = Resources.resourceDescriptions(ch.resourceID)
           v.decider.assume(interpreter.buildPathConditionsForChunk(ch, resource.instanceProperties))
         }
@@ -105,7 +103,7 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
         }
 
         v.symbExLog.closeScope(sepIdentifier)
-        (functionRecorder, hs :+ Heap(allChunks))
+        (functionRecorder, hs :+ Heap(mergedChunks))
       }
 
     val s1 = s.copy(functionRecorder = functionRecorderAfterHeapMerging,
@@ -128,36 +126,34 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
   def merge(fr1: FunctionRecorder, h: Heap, newH: Heap, v: Verifier): (FunctionRecorder, Heap) = {
     val mergeLog = new CommentRecord("Merge", null, v.decider.pcs)
     val sepIdentifier = v.symbExLog.openScope(mergeLog)
-    val (nonQuantifiedChunks, otherChunks) = partition(h)
-    val (newNonQuantifiedChunks, newOtherChunk) = partition(newH)
-    val (fr2, mergedChunks, newlyAddedChunks, snapEqs) = singleMerge(fr1, nonQuantifiedChunks, newNonQuantifiedChunks, v)
+    val (fr2, mergedChunks, newlyAddedChunks, snapEqs) = singleMerge(fr1, h.values.toSeq, newH.values.toSeq, v)
 
     v.decider.assume(snapEqs)
 
     val interpreter = new NonQuantifiedPropertyInterpreter(mergedChunks, v)
-    newlyAddedChunks foreach { ch =>
+    newlyAddedChunks.filter(_.isInstanceOf[BasicChunk]) foreach { case ch: BasicChunk =>
       val resource = Resources.resourceDescriptions(ch.resourceID)
       v.decider.assume(interpreter.buildPathConditionsForChunk(ch, resource.instanceProperties))
     }
 
     v.symbExLog.closeScope(sepIdentifier)
-    (fr2, Heap(mergedChunks ++ otherChunks ++ newOtherChunk))
+    (fr2, Heap(mergedChunks))
   }
 
   private def singleMerge(fr: FunctionRecorder,
-                          destChunks: Seq[NonQuantifiedChunk],
-                          newChunks: Seq[NonQuantifiedChunk],
+                          destChunks: Seq[Chunk],
+                          newChunks: Seq[Chunk],
                           v: Verifier)
                          : (FunctionRecorder,
-                            Seq[NonQuantifiedChunk],
-                            Seq[NonQuantifiedChunk],
+                            Seq[Chunk],
+                            Seq[Chunk],
                             InsertionOrderedSet[Term]) = {
 
     val mergeLog = new SingleMergeRecord(destChunks, newChunks, v.decider.pcs)
     val sepIdentifier = v.symbExLog.openScope(mergeLog)
     // bookkeeper.heapMergeIterations += 1
 
-    val initial = (fr, destChunks, Seq[NonQuantifiedChunk](), InsertionOrderedSet[Term]())
+    val initial = (fr, destChunks, Seq[Chunk](), InsertionOrderedSet[Term]())
 
     val result = newChunks.foldLeft(initial) { case ((fr1, accMergedChunks, accNewChunks, accSnapEqs), nextChunk) =>
       /* accMergedChunks: already merged chunks
@@ -185,12 +181,17 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
 
   // Merges two chunks that are aliases (i.e. that have the same id and the args are proven to be equal)
   // and returns the merged chunk or None, if the chunks could not be merged
-  private def mergeChunks(fr1: FunctionRecorder, chunk1: NonQuantifiedChunk, chunk2: NonQuantifiedChunk, v: Verifier) = (chunk1, chunk2) match {
+  private def mergeChunks(fr1: FunctionRecorder, chunk1: Chunk, chunk2: Chunk, v: Verifier) = (chunk1, chunk2) match {
     case (BasicChunk(rid1, id1, args1, snap1, perm1), BasicChunk(_, _, _, snap2, perm2)) =>
       val (fr2, combinedSnap, snapEq) = combineSnapshots(fr1, snap1, snap2, perm1, perm2, v)
 
       Some(fr2, BasicChunk(rid1, id1, args1, combinedSnap, PermPlus(perm1, perm2)), snapEq)
-    case (_, _) =>
+    case (l@QuantifiedFieldChunk(id1, fvf1, condition1, perm1, invs1, initialCond1, singletonRcvr1, hints1), r@QuantifiedFieldChunk(_, fvf2, _, perm2, _, _, singletonRcvr2, hints2)) =>
+      val (fr2, combinedSnap, snapEq) = combineSnapshots(fr1, fvf1, fvf2, perm1, perm2.replace(r.quantifiedVars, l.quantifiedVars), v)
+      // TODO: Deal with hints
+      // TODO: Store multiple known singleton receivers for better heuristics?
+      Some(fr2, QuantifiedFieldChunk(id1, combinedSnap, condition1, PermPlus(perm1, perm2), invs1, initialCond1, singletonRcvr2, hints1), Forall(l.quantifiedVars, snapEq, Nil))
+    case (l, r) =>
       None
   }
 

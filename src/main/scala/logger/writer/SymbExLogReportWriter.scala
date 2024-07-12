@@ -58,11 +58,12 @@ object SymbExLogReportWriter {
         "perm" -> TermWriter.toJSON(perm)
       )
 
-    case QuantifiedFieldChunk(id, fvf, perm, invs, cond, receiver, hints) =>
+    case QuantifiedFieldChunk(id, fvf, condition, perm, invs, cond, receiver, hints) =>
       JsObject(
         "type" -> JsString("quantified_field_chunk"),
         "field" -> JsString(id.toString),
         "field_value_function" -> TermWriter.toJSON(fvf),
+        "condition" -> TermWriter.toJSON(condition),
         "perm" -> TermWriter.toJSON(perm),
         "invs" -> invs.map(inverseFunctionsToJSON).getOrElse(JsNull),
         "cond" -> cond.map(TermWriter.toJSON).getOrElse(JsNull),

@@ -87,7 +87,7 @@ object moreCompleteExhaleSupporter extends SymbolicExecutionRules {
                 case None =>
                   // We have not yet checked for a definite alias
                   val id = ChunkIdentifier(resource, s.program)
-                  val potentialAlias = chunkSupporter.findChunk[NonQuantifiedChunk](relevantChunks, id, args, v)
+                  val potentialAlias = chunkSupporter.findNonQPChunk[NonQuantifiedChunk](relevantChunks, id, args, v)
                   potentialAlias.filter(c => v.decider.check(IsPositive(c.perm), Verifier.config.checkTimeout())).map(_.snap)
                 case Some(v) =>
                   // We have checked for a definite alias and may or may not have found one.
@@ -254,7 +254,7 @@ object moreCompleteExhaleSupporter extends SymbolicExecutionRules {
         val newChunks = ListBuffer[NonQuantifiedChunk]()
         var moreNeeded = true
 
-        val definiteAlias = chunkSupporter.findChunk[NonQuantifiedChunk](relevantChunks, id, args, v).filter(c =>
+        val definiteAlias = chunkSupporter.findNonQPChunk[NonQuantifiedChunk](relevantChunks, id, args, v).filter(c =>
           v.decider.check(IsPositive(c.perm), Verifier.config.checkTimeout())
         )
 
