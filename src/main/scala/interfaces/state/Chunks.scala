@@ -7,6 +7,7 @@
 package viper.silicon.interfaces.state
 
 import viper.silicon.resources.ResourceID
+import viper.silicon.state.QuantifiedBasicChunk
 import viper.silicon.state.terms.{Term, Var}
 
 trait Chunk
@@ -17,6 +18,7 @@ trait GeneralChunk extends Chunk {
   val resourceID: ResourceID
   val id: ChunkIdentifer
   val perm: Term
+  def applyCondition(newCond: Term): GeneralChunk
   def permMinus(perm: Term): GeneralChunk
   def permPlus(perm: Term): GeneralChunk
   def withPerm(perm: Term): GeneralChunk
@@ -25,6 +27,7 @@ trait GeneralChunk extends Chunk {
 trait NonQuantifiedChunk extends GeneralChunk {
   val args: Seq[Term]
   val snap: Term
+  override def applyCondition(newCond: Term): NonQuantifiedChunk
   override def permMinus(perm: Term): NonQuantifiedChunk
   override def permPlus(perm: Term): NonQuantifiedChunk
   override def withPerm(perm: Term): NonQuantifiedChunk
@@ -35,6 +38,7 @@ trait QuantifiedChunk extends GeneralChunk {
   val quantifiedVars: Seq[Var]
   def snapshotMap: Term
   def valueAt(arguments: Seq[Term]): Term
+  override def applyCondition(newCond: Term): QuantifiedBasicChunk
   override def permMinus(perm: Term): QuantifiedChunk
   override def permPlus(perm: Term): QuantifiedChunk
   override def withPerm(perm: Term): QuantifiedChunk

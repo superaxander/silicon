@@ -187,10 +187,12 @@ class DefaultStateConsolidator(protected val config: Config) extends StateConsol
 
       Some(fr2, BasicChunk(rid1, id1, args1, combinedSnap, PermPlus(perm1, perm2)), snapEq)
     case (l@QuantifiedFieldChunk(id1, fvf1, condition1, perm1, invs1, initialCond1, singletonRcvr1, hints1), r@QuantifiedFieldChunk(_, fvf2, _, perm2, _, _, singletonRcvr2, hints2)) =>
-      val (fr2, combinedSnap, snapEq) = combineSnapshots(fr1, fvf1, fvf2, perm1, perm2.replace(r.quantifiedVars, l.quantifiedVars), v)
+      assert(l.quantifiedVars == Seq(`?r`))
+      assert(r.quantifiedVars == Seq(`?r`))
+      val (fr2, combinedSnap, snapEq) = quantifiedChunkSupporter.combineFieldSnapshotMaps(fr1, id1.name, fvf1, fvf2, perm1, perm2, v)
       // TODO: Deal with hints
       // TODO: Store multiple known singleton receivers for better heuristics?
-      Some(fr2, QuantifiedFieldChunk(id1, combinedSnap, condition1, PermPlus(perm1, perm2), invs1, initialCond1, singletonRcvr2, hints1), Forall(l.quantifiedVars, snapEq, Nil))
+      Some(fr2, QuantifiedFieldChunk(id1, combinedSnap, condition1, PermPlus(perm1, perm2), invs1, initialCond1, singletonRcvr2, hints1), snapEq)
     case (l, r) =>
       None
   }
