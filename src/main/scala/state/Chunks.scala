@@ -100,7 +100,7 @@ case class QuantifiedFieldChunk(id: BasicChunkIdentifier,
   override def applyCondition(newCond: Term) = QuantifiedFieldChunk(id, fvf, terms.And(newCond, condition), permValue, invs, initialCond, singletonRcvr, hints)
   override def permMinus(newPerm: Term) = QuantifiedFieldChunk(id, fvf, condition, PermMinus(permValue, newPerm), invs, initialCond, singletonRcvr, hints)
   override def permPlus(newPerm: Term) = QuantifiedFieldChunk(id, fvf, condition, PermPlus(permValue, newPerm), invs, initialCond, singletonRcvr, hints)
-  override def withPerm(newPerm: Term) = throw new RuntimeException("Should not be used with quantified field chunk")
+  override def withPerm(newPerm: Term) = throw new RuntimeException("Should not be used with quantified field chunks")
   override def withSnapshotMap(newFvf: Term) = QuantifiedFieldChunk(id, newFvf, condition, permValue, invs, initialCond, singletonRcvr, hints)
 
   override lazy val toString = s"${terms.Forall} ${`?r`} :: ${`?r`}.$id -> $fvf # $perm"
@@ -109,7 +109,8 @@ case class QuantifiedFieldChunk(id: BasicChunkIdentifier,
 case class QuantifiedPredicateChunk(id: BasicChunkIdentifier,
                                     quantifiedVars: Seq[Var],
                                     psf: Term,
-                                    perm: Term,
+                                    condition: Term,
+                                    permValue: Term,
                                     invs: Option[InverseFunctions],
                                     initialCond: Option[Term],
                                     singletonArgs: Option[Seq[Term]],
@@ -117,20 +118,21 @@ case class QuantifiedPredicateChunk(id: BasicChunkIdentifier,
     extends QuantifiedBasicChunk {
 
   require(psf.sort.isInstanceOf[terms.sorts.PredicateSnapFunction], s"Quantified predicate chunk values must be of sort PredicateSnapFunction ($psf), but found ${psf.sort}")
-  require(perm.sort == sorts.Perm, s"Permissions $perm must be of sort Perm, but found ${perm.sort}")
+  require(permValue.sort == sorts.Perm, s"Permissions $permValue must be of sort Perm, but found ${permValue.sort}")
 
   override val resourceID = PredicateID
+  override val perm = Ite(condition, permValue, NoPerm)
 
   override def snapshotMap: Term = psf
   override def singletonArguments: Option[Seq[Term]] = singletonArgs
 
   override def valueAt(args: Seq[Term]) = PredicateLookup(id.name, psf, args)
 
-  override def applyCondition(newCond: Term) = withPerm(Ite(newCond, perm, NoPerm))
-  override def permMinus(newPerm: Term) = withPerm(PermMinus(perm, newPerm))
-  override def permPlus(newPerm: Term) = withPerm(PermPlus(perm, newPerm))
-  override def withPerm(newPerm: Term) = QuantifiedPredicateChunk(id, quantifiedVars, psf, newPerm, invs, initialCond, singletonArgs, hints)
-  override def withSnapshotMap(newPsf: Term) = QuantifiedPredicateChunk(id, quantifiedVars, newPsf, perm, invs, initialCond, singletonArgs, hints)
+  override def applyCondition(newCond: Term) = QuantifiedPredicateChunk(id, quantifiedVars, psf, terms.And(newCond, condition), permValue, invs, initialCond, singletonArgs, hints)
+  override def permMinus(newPerm: Term) = QuantifiedPredicateChunk(id, quantifiedVars, psf, condition, PermMinus(permValue, newPerm), invs, initialCond, singletonArgs, hints)
+  override def permPlus(newPerm: Term) = QuantifiedPredicateChunk(id, quantifiedVars, psf, condition, PermPlus(permValue, newPerm), invs, initialCond, singletonArgs, hints)
+  override def withPerm(newPerm: Term) = throw new RuntimeException("Should not be used with quantified predicate chunks")
+  override def withSnapshotMap(newPsf: Term) = QuantifiedPredicateChunk(id, quantifiedVars, newPsf, condition, permValue, invs, initialCond, singletonArgs, hints)
 
   override lazy val toString = s"${terms.Forall} ${quantifiedVars.mkString(",")} :: $id(${quantifiedVars.mkString(",")}) -> $psf # $perm"
 }

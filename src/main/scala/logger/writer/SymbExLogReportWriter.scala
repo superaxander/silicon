@@ -71,12 +71,13 @@ object SymbExLogReportWriter {
         "hints" -> (if (hints.nonEmpty) JsArray(hints.map(TermWriter.toJSON).toVector) else JsNull)
       )
 
-    case QuantifiedPredicateChunk(id, vars, psf, perm, invs, cond, singletonArgs, hints) =>
+    case QuantifiedPredicateChunk(id, vars, psf, condition, perm, invs, cond, singletonArgs, hints) =>
       JsObject(
         "type" -> JsString("quantified_predicate_chunk"),
         "vars" -> JsArray(vars.map(TermWriter.toJSON).toVector),
         "predicate" -> JsString(id.toString),
         "predicate_snap_function" -> TermWriter.toJSON(psf),
+        "condition" -> TermWriter.toJSON(condition),
         "perm" -> TermWriter.toJSON(perm),
         "invs" -> invs.map(inverseFunctionsToJSON).getOrElse(JsNull),
         "cond" -> cond.map(TermWriter.toJSON).getOrElse(JsNull),
