@@ -127,9 +127,9 @@ class DefaultMainVerifier(config: Config,
       _verificationPoolManager.pooledVerifiers.emit(contents)
     }
 
-    def assume(term: Term): Unit = {
-      decider.prover.assume(term)
-      _verificationPoolManager.pooledVerifiers.assume(term)
+    def assume(term: Term, id: Option[String] = None): Unit = {
+      decider.prover.assume(term, id)
+      _verificationPoolManager.pooledVerifiers.assume(term, id)
     }
 
     def declare(decl: Decl): Unit = {

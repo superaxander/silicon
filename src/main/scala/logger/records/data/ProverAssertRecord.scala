@@ -14,11 +14,12 @@ import viper.silicon.state.State
 import viper.silicon.state.terms.Term
 import viper.silver.ast
 
-class ProverAssertRecord(val term: Term, val timeout: Option[Int]) extends DataRecord {
-  val value: ast.Node = null
+class ProverAssertRecord(val term: Term, val timeout: Option[Int], inputValue: Option[ast.Node]) extends DataRecord {
+  val value: ast.Node = inputValue.orNull
   val state: State = null
   val pcs: InsertionOrderedSet[Term] = null
   var statistics: Option[Map[String, String]] = None
+  var dependencies: Seq[Term] = Nil
 
   override val toTypeString: String = "prover assert"
 
@@ -31,6 +32,7 @@ class ProverAssertRecord(val term: Term, val timeout: Option[Int]) extends DataR
     val data = super.getData(config)
     data.isSmtQuery = true
     data.smtStatistics = statistics
+    data.dependencies = dependencies
     data
   }
 }

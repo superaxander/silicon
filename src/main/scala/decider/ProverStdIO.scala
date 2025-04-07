@@ -219,7 +219,7 @@ abstract class ProverStdIO(uniqueId: String,
 
 //  private val quantificationLogger = bookkeeper.logfiles("quantification-problems")
 
-  def assume(term: Term): Unit = {
+  def assume(term: Term, id: Option[String] = None): Unit = {
 //    /* Detect certain simple problems with quantifiers.
 //     * Note that the current checks don't take in account whether or not a
 //     * quantification occurs in positive or negative position.
@@ -234,34 +234,38 @@ abstract class ProverStdIO(uniqueId: String,
 //      }
 //    })
 
-    assume(termConverter.convert(term))
+    assume(termConverter.convert(term), id)
   }
 
-  def assume(term: String): Unit = {
+  def assume(term: String, id: Option[String]): Unit = {
 //    bookkeeper.assumptionCounter += 1
-
-    writeLine("(assert " + term + ")")
+    if (id.isDefined){
+      writeLine("(assert (! " + term +" :named " + id.get + "))")
+    } else {
+      writeLine("(assert " + term + ")")
+    }
     readSuccess()
   }
 
-  def assert(goal: Term, timeout: Option[Int] = None): Boolean =
+  def assert(goal: Term, timeout: Option[Int] = None): (Boolean, Seq[String]) =
     assert(termConverter.convert(goal), timeout)
 
-  def assert(goal: String, timeout: Option[Int]): Boolean = {
+  def assert(goal: String, timeout: Option[Int]): (Boolean, Seq[String]) = {
 //    bookkeeper.assertionCounter += 1
 
-    val (result, duration) = Verifier.config.assertionMode() match {
+    val (result, duration, unsat_core) = Verifier.config.assertionMode() match {
       case Config.AssertionMode.SoftConstraints => assertUsingSoftConstraints(goal, timeout)
       case Config.AssertionMode.PushPop => assertUsingPushPop(goal, timeout)
     }
 
+
     comment(s"${viper.silver.reporter.format.formatMillisReadably(duration)}")
     comment("(get-info :all-statistics)")
 
-    result
+    (result, unsat_core)
   }
 
-  protected def assertUsingPushPop(goal: String, timeout: Option[Int]): (Boolean, Long) = {
+  protected def assertUsingPushPop(goal: String, timeout: Option[Int]): (Boolean, Long, Seq[String]) = {
     push()
     setTimeout(timeout)
 
@@ -273,14 +277,24 @@ abstract class ProverStdIO(uniqueId: String,
     val result = readUnsat()
     val endTime = System.currentTimeMillis()
 
-    if (!result) {
+    val unsat_core = if (!result) {
       retrieveAndSaveModel()
       retrieveReasonUnknown()
+      Nil
+    } else {
+      writeLine("(get-unsat-core)")
+      val answer = readLine()
+      if (answer.startsWith("(error")) {
+        println(answer)
+        Nil
+      } else {
+        answer.substring(1, answer.length - 1).split(' ').toSeq
+      }
     }
 
     pop()
 
-    (result, endTime - startTime)
+    (result, endTime - startTime, unsat_core)
   }
 
   def saturate(data: Option[Config.ProverStateSaturationTimeout]): Unit = {
@@ -327,7 +341,7 @@ abstract class ProverStdIO(uniqueId: String,
     lastModel != null && !lastModel.contains("model is not available")
   }
 
-  protected def assertUsingSoftConstraints(goal: String, timeout: Option[Int]): (Boolean, Long) = {
+  protected def assertUsingSoftConstraints(goal: String, timeout: Option[Int]): (Boolean, Long, Seq[String]) = {
     setTimeout(timeout)
 
     val guard = fresh("grd", Nil, sorts.Bool)
@@ -341,11 +355,21 @@ abstract class ProverStdIO(uniqueId: String,
     val result = readUnsat()
     val endTime = System.currentTimeMillis()
 
-    if (!result) {
+    val unsat_core = if (!result) {
       retrieveAndSaveModel()
+      Nil
+    } else {
+      writeLine("(get-unsat-core)")
+      val answer = readLine()
+      if (answer.startsWith("(error")) {
+        println(answer)
+        Nil
+      } else {
+        answer.substring(1, answer.length - 1).split(' ').toSeq
+      }
     }
 
-    (result, endTime - startTime)
+    (result, endTime - startTime, unsat_core)
   }
 
   def check(timeout: Option[Int] = None): Result = {

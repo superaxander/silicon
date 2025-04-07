@@ -73,7 +73,7 @@ trait Decider {
    *         1. It passes State and Operations to the continuation
    *         2. The implementation reacts to a failing assertion by e.g. a state consolidation
    */
-  def assert(t: Term, timeout: Option[Int] = None)(Q:  Boolean => VerificationResult): VerificationResult
+  def assert(t: Term, timeout: Option[Int] = None, node: Option[ast.Node] = None)(Q:  Boolean => VerificationResult): VerificationResult
 
   def fresh(id: String, sort: Sort, ptype: Option[PType]): Var
   def fresh(id: String, argSorts: Seq[Sort], resultSort: Sort): Function
@@ -125,11 +125,14 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
     private var _declaredFreshFunctions: Set[FunctionDecl] = _ /* [BRANCH-PARALLELISATION] */
     private var _declaredFreshMacros: Vector[MacroDecl] = _
     private var _declaredFreshMacroNames: Set[String] = _ /* contains names of _declaredFreshMacros for faster lookup */
+    // TODO: Actually put this in the path conditions so that it only remains for as long as is necessary!
+    private var _termIdLookup: Vector[Term] = _
 
     private var _proverOptions: Map[String, String] = Map.empty
     private var _proverResetOptions: Map[String, String] = Map.empty
     private val _debuggerAssumedTerms: mutable.Set[Term] = mutable.Set.empty
-    
+
+
     def functionDecls: Set[FunctionDecl] = _declaredFreshFunctions
     def macroDecls: Vector[MacroDecl] = _declaredFreshMacros
 
@@ -148,7 +151,11 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       // TODO: Change interface to make the cast unnecessary?
       val layeredStack = other.asInstanceOf[LayeredPathConditionStack]
       layeredStack.layers.reverse.foreach(l => {
-        l.assumptions foreach prover.assume
+        l.assumptions.foreach{ t=>
+          val id = s"termId${_termIdLookup.length}"
+          _termIdLookup = _termIdLookup :+ t
+          prover.assume(t, Some(id))
+        }
         prover.push(timeout = Verifier.config.pushTimeout.toOption)
       })
     }
@@ -215,6 +222,7 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       _declaredFreshFunctions = if (Verifier.config.parallelizeBranches()) HashSet.empty else InsertionOrderedSet.empty /* [BRANCH-PARALLELISATION] */
       _declaredFreshMacros = Vector.empty
       _declaredFreshMacroNames = HashSet.empty
+      _termIdLookup = Vector.empty
       createProver(Verifier.config.prover(), Verifier.config.proverArgs)
     }
 
@@ -224,6 +232,7 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       _declaredFreshFunctions = if (Verifier.config.parallelizeBranches()) HashSet.empty else InsertionOrderedSet.empty /* [BRANCH-PARALLELISATION] */
       _declaredFreshMacros = Vector.empty
       _declaredFreshMacroNames = HashSet.empty
+      _termIdLookup = Vector.empty
       _proverOptions = Map.empty
     }
 
@@ -353,7 +362,12 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       }
 
       /* Add terms to the prover's assumptions */
-      terms foreach prover.assume
+      terms.foreach { t =>
+        val id = s"termId${_termIdLookup.length}"
+        _termIdLookup = _termIdLookup :+ t
+        prover.assume(t, Some(id))
+      }
+//      terms foreach prover.assume
 
       symbExLog.closeScope(sepIdentifier)
       None
@@ -366,13 +380,13 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       prover.check(timeout) == Unsat
     }
 
-    def check(t: Term, timeout: Int): Boolean = deciderAssert(t, Some(timeout))
+    def check(t: Term, timeout: Int): Boolean = deciderAssert(t, Some(timeout), None)
 
-    def assert(t: Term, timeout: Option[Int] = Verifier.config.assertTimeout.toOption)
+    def assert(t: Term, timeout: Option[Int] = Verifier.config.assertTimeout.toOption, node: Option[ast.Node] = None)
               (Q: Boolean => VerificationResult)
               : VerificationResult = {
 
-      val success = deciderAssert(t, timeout)
+      val success = deciderAssert(t, timeout, node)
 
       // If the SMT query was not successful, store it (possibly "overwriting"
       // any previously saved query), otherwise discard any query we had saved
@@ -386,12 +400,12 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       Q(success)
     }
 
-    private def deciderAssert(t: Term, timeout: Option[Int]) = {
+    private def deciderAssert(t: Term, timeout: Option[Int], node: Option[ast.Node]) = {
       val assertRecord = new DeciderAssertRecord(t, timeout)
       val sepIdentifier = symbExLog.openScope(assertRecord)
 
       val asserted = isKnownToBeTrue(t)
-      val result = asserted || proverAssert(t, timeout)
+      val result = asserted || proverAssert(t, timeout, node)
 
       symbExLog.closeScope(sepIdentifier)
       result
@@ -405,14 +419,15 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       case _ => false
     }
 
-    private def proverAssert(t: Term, timeout: Option[Int]) = {
-      val assertRecord = new ProverAssertRecord(t, timeout)
+    private def proverAssert(t: Term, timeout: Option[Int], node: Option[ast.Node]) = {
+      val assertRecord = new ProverAssertRecord(t, timeout, node)
       val sepIdentifier = symbExLog.openScope(assertRecord)
 
-      val result = prover.assert(t, timeout)
+      val (result, unsat_core) = prover.assert(t, timeout)
 
       symbExLog.whenEnabled {
         assertRecord.statistics = Some(symbExLog.deltaStatistics(prover.statistics()))
+        assertRecord.dependencies = unsat_core.map { s => _termIdLookup(s.substring(6).toInt) }
       }
 
       symbExLog.closeScope(sepIdentifier)
@@ -527,7 +542,7 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
 
     def statistics(): Map[String, String] = prover.statistics()
 
-    override def generateModel(): Unit = proverAssert(False, Verifier.config.assertTimeout.toOption)
+    override def generateModel(): Unit = proverAssert(False, Verifier.config.assertTimeout.toOption, None)
 
     override def getModel(): Model = prover.getModel()
 

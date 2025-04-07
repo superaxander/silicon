@@ -263,7 +263,7 @@ class Z3ProverAPI(uniqueId: String,
     throw new ProverInteractionFailed(uniqueId, "Dynamically setting prover options via Z3 API is currently not supported.")
   }
 
-  def assume(term: Term): Unit = {
+  def assume(term: Term, id: Option[String] = None): Unit = {
     try {
       if (preamblePhaseOver)
         prover.add(termConverter.convert(term).asInstanceOf[BoolExpr])
@@ -294,7 +294,7 @@ class Z3ProverAPI(uniqueId: String,
     cleanTerm
   }
 
-  def assert(goal: Term, timeout: Option[Int]): Boolean = {
+  def assert(goal: Term, timeout: Option[Int]): (Boolean, Seq[String]) = {
     endPreamblePhase()
 
     try {
@@ -302,7 +302,7 @@ class Z3ProverAPI(uniqueId: String,
         case Config.AssertionMode.SoftConstraints => assertUsingSoftConstraints(goal, timeout)
         case Config.AssertionMode.PushPop => assertUsingPushPop(goal, timeout)
       }
-      result
+      (result, Nil)
     } catch {
       case e: Z3Exception => {
         val cleanGoal = cleanTriggers(goal)

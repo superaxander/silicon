@@ -499,7 +499,7 @@ class SiliconDebugger(verificationResults: List[VerificationResult],
 
     verificationResult match {
       case Success() =>
-        val proved = isFree || resV.decider.prover.assert(resT, None)
+        val proved = isFree || resV.decider.prover.assert(resT, None)._1
         if (proved) {
           println("Assumption was added successfully!")
           resV.asInstanceOf[WorkerVerifier].decider.debuggerAssume(Seq(resT), null)
@@ -515,7 +515,7 @@ class SiliconDebugger(verificationResults: List[VerificationResult],
   }
 
   private def assertProofObligation(obl: ProofObligation): Unit = {
-    val verificationResult = obl.v.decider.prover.assert(obl.assertion, obl.timeout)
+    val verificationResult = obl.v.decider.prover.assert(obl.assertion, obl.timeout)._1
     if (verificationResult) {
       println("PASS: Proving obligation was successful.\n")
     } else {

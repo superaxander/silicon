@@ -22,4 +22,5 @@ class RecordData {
   var heap: Option[Heap] = None
   var oldHeap: Option[Heap] = None
   var pcs: Option[InsertionOrderedSet[Term]] = None
+  var dependencies: Seq[Term] = Nil
 }

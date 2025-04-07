@@ -30,10 +30,10 @@ trait ProverLike {
   def assumeAxioms(terms: InsertionOrderedSet[Term], description: String): Unit = {
     if (debugMode)
       preambleAssumptions :+= new DebugAxiom(description, terms)
-    terms foreach assume
+    terms.foreach { t => assume(t, None) }
   }
   def setOption(name: String, value: String): String
-  def assume(term: Term): Unit
+  def assume(term: Term, id: Option[String] = None): Unit
   def declare(decl: Decl): Unit
   def comment(content: String): Unit
   def saturate(timeout: Int, comment: String): Unit
@@ -42,7 +42,7 @@ trait ProverLike {
 
 trait Prover extends ProverLike with StatefulComponent {
   def start(userArgsString: Option[String]): Unit
-  def assert(goal: Term, timeout: Option[Int] = None): Boolean
+  def assert(goal: Term, timeout: Option[Int] = None): (Boolean, Seq[String])
   def check(timeout: Option[Int] = None): Result
   def fresh(id: String, argSorts: Seq[Sort], resultSort: Sort): Function
   def statistics(): Map[String, String]
