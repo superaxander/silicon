@@ -288,7 +288,7 @@ abstract class ProverStdIO(uniqueId: String,
         println(answer)
         Nil
       } else {
-        answer.substring(1, answer.length - 1).split(' ').toSeq
+        answer.substring(1, answer.length - 1).split(' ').toSeq.filter(_.nonEmpty)
       }
     }
 
