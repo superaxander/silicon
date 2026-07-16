@@ -43,6 +43,7 @@ trait Verifier {
   val heapSupporter: HeapSupportRules = defaultHeapSupporter
 
   def verificationPoolManager: VerificationPoolManager
+  def portfolioPoolManager: PortfolioPoolManager
 
   val errorsReportedSoFar = new AtomicInteger(0);
 

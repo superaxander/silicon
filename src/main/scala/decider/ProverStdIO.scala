@@ -40,6 +40,9 @@ abstract class ProverStdIO(uniqueId: String,
   protected var allDecls: Seq[Decl] = Seq()
   protected var allEmits: Seq[String] = Seq()
 
+  private var log: Seq[Seq[String]] = Seq(Seq())
+  private var shouldLog: Boolean = false
+
   var proverPath: Path = _
   var lastReasonUnknown : String = _
   var lastModel : String = _
@@ -50,6 +53,8 @@ abstract class ProverStdIO(uniqueId: String,
 
   protected def setTimeout(timeout: Option[Int]): Unit
   protected def getProverPath: Path
+
+  override def unique(): String = uniqueId
 
   @inline
   private def readLineFromInput(): String = {
@@ -180,22 +185,30 @@ abstract class ProverStdIO(uniqueId: String,
       allDecls = Seq()
       allEmits = Seq()
       preambleAssumptions = Seq()
+      log = Seq(Seq())
+      shouldLog = false
     }
   }
 
   def push(n: Int = 1, timeout: Option[Int] = None): Unit = {
+    if (!shouldLog) return
     setTimeout(timeout)
     pushPopScopeDepth += n
     val cmd = (if (n == 1) "(push)" else "(push " + n + ")") + " ; " + pushPopScopeDepth
     writeLine(cmd)
     readSuccess()
+    (0 until n).foreach { _ => log = Seq() +: log}
   }
 
   def pop(n: Int = 1): Unit = {
+    if (!shouldLog) return
     val cmd = (if (n == 1) "(pop)" else "(pop " + n + ")") + " ; " + pushPopScopeDepth
     pushPopScopeDepth -= n
     writeLine(cmd)
     readSuccess()
+    val dropped = log.take(n)
+    log = log.drop(n)
+    log = (log.head ++ dropped.reverse.flatten.filter(s => s.startsWith("(declare") || s.startsWith("(define"))) +: log.tail
   }
 
   def emit(content: String): Unit = {
@@ -348,10 +361,14 @@ abstract class ProverStdIO(uniqueId: String,
     (result, endTime - startTime)
   }
 
-  def check(timeout: Option[Int] = None): Result = {
+  def check(timeout: Option[Int] = None, strategy: Option[String] = None): Result = {
     setTimeout(timeout)
 
-    writeLine("(check-sat)")
+    if (strategy.isEmpty) {
+      writeLine("(check-sat)")
+    } else {
+      writeLine(s"(check-sat-using ${strategy.get})")
+    }
 
     readLine() match {
       case "sat" => Sat
@@ -506,6 +523,10 @@ abstract class ProverStdIO(uniqueId: String,
   protected def writeLine(out: String): Unit = {
     logToFile(out)
     output.println(out)
+    if (!out.startsWith("(push") && !out.startsWith("(pop") && !out.startsWith("(check-sat") && !out.startsWith("(get-") && !out.startsWith("(set-option :timeout") && !out.startsWith("(set-option :rlimit") && !out.startsWith("(set-option :reproducible-resource-limit") && !out.startsWith("(set-option :tlimit-per")) {
+      if (shouldLog)
+      log = (log.head :+ out) +: log.tail
+    }
   }
 
   override def getModel(): Model = Model(lastModel)
@@ -516,6 +537,11 @@ abstract class ProverStdIO(uniqueId: String,
     lastReasonUnknown = null
     lastModel = null
   }
+
+  override def getLog(): Option[Seq[String]] =
+    Some(log.reduceRight[Seq[String]] { case (l,r) => r ++ l})
+
+  override def startLog(): Unit = shouldLog = true
 
   def getAllDecls(): Seq[Decl] = allDecls
 }

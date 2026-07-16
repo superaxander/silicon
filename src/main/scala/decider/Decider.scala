@@ -129,7 +129,9 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
     private var _proverOptions: Map[String, String] = Map.empty
     private var _proverResetOptions: Map[String, String] = Map.empty
     private val _debuggerAssumedTerms: mutable.Set[Term] = mutable.Set.empty
-    
+
+    private val preambleReader = new SMTLib2PreambleReader
+
     def functionDecls: Set[FunctionDecl] = _declaredFreshFunctions
     def macroDecls: Vector[MacroDecl] = _declaredFreshMacros
 
@@ -153,10 +155,10 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       })
     }
 
-    private def getProver(prover: String): Prover = prover match {
-      case Z3ProverStdIO.name => new Z3ProverStdIO(uniqueId, termConverter, identifierFactory, reporter)
-      case Cvc5ProverStdIO.name => new Cvc5ProverStdIO(uniqueId, termConverter, identifierFactory, reporter)
-      case Z3ProverAPI.name => new Z3ProverAPI(uniqueId, new TermToZ3APIConverter(), identifierFactory, reporter, triggerGenerator)
+    private def getProver(prover: String, suffix: String = ""): Prover = prover match {
+      case Z3ProverStdIO.name => new Z3ProverStdIO(f"$uniqueId$suffix", termConverter, identifierFactory, reporter)
+      case Cvc5ProverStdIO.name => new Cvc5ProverStdIO(f"$uniqueId$suffix", termConverter, identifierFactory, reporter)
+      case Z3ProverAPI.name => new Z3ProverAPI(f"$uniqueId$suffix", new TermToZ3APIConverter(), identifierFactory, reporter, triggerGenerator)
       case prover =>
         val msg1 = s"Unknown prover '$prover' provided. Defaulting to ${Z3ProverStdIO.name}."
         logger warn msg1
@@ -409,7 +411,37 @@ trait DefaultDeciderProvider extends VerifierComponent { this: Verifier =>
       val assertRecord = new ProverAssertRecord(t, timeout)
       val sepIdentifier = symbExLog.openScope(assertRecord)
 
-      val result = prover.assert(t, timeout)
+      val result = if (timeout.isEmpty || Verifier.config.assertTimeout.isDefined && (timeout.get >= Verifier.config.assertTimeout.toOption.get)) {
+        val log = prover.getLog()
+        if (log.isDefined) {
+          if (prover.assert(t, Some(timeout.getOrElse(Verifier.config.proverTimeout) / 30))) {true} else {
+            val preambles = Seq(
+              decider.prover.staticPreamble,
+              "/z3config-2.smt2",
+              "/z3config-2.smt2",
+              Cvc5ProverStdIO.staticPreamble,
+              "/cvc5config-2.smt2")
+            val strategies = Seq(
+              None,
+              None,
+              Some("(par-or (then (then degree-shift (using-params smt :random_seed 500)) fail-if-undecided) (then (then cofactor-term-ite lia) fail-if-undecided) (then (then purify-arith (using-params simplify :elim_and true :blast_distinct true :local_ctx true :pull_cheap_ite true :som true :flat true :push_ite_arith true :hoist_ite true :arith_lhs true) lia2pb lia) fail-if-undecided) (then (then recover-01 elim-uncnstr solve-eqs purify-arith smt) fail-if-undecided))"),
+              None,
+              None)
+            val provers = Seq(
+              getProver(Verifier.config.prover.toOption.get, "-adhoc-normal"),
+              getProver(Verifier.config.prover.toOption.get, "-adhoc-auto"),
+              getProver(Verifier.config.prover.toOption.get, "-adhoc-auto-nia"),
+              getProver("cvc5", "-adhoc-cvc"),
+              getProver("cvc5", "-adhoc-cvc-cadical"),
+            )
+            portfolioPoolManager.attemptProofs(t, timeout, provers, preambles, strategies, log.get)
+          }
+        } else {
+          prover.assert(t, timeout)
+        }
+      } else {
+        prover.assert(t, timeout)
+      }
 
       symbExLog.whenEnabled {
         assertRecord.statistics = Some(symbExLog.deltaStatistics(prover.statistics()))

@@ -99,6 +99,7 @@ class Z3ProverAPI(uniqueId: String,
   val expandMacros = true
 
 
+  override def unique(): String = uniqueId
 
   def version(): Version = {
     var versString = com.microsoft.z3.Version.getFullVersion
@@ -246,6 +247,10 @@ class Z3ProverAPI(uniqueId: String,
 
   def getAllEmits(): Seq[String] = emittedPreambleString.toSeq
 
+  override def getLog(): Option[Seq[String]] = None
+
+  override def startLog(): Unit = ()
+
   override def emitSettings(contents: Iterable[String]): Unit = {
     // we ignore this, don't know any better solution atm.
     // our settings are defined in this class (see above).
@@ -389,7 +394,7 @@ class Z3ProverAPI(uniqueId: String,
     (result, endTime - startTime)
   }
 
-  def check(timeout: Option[Int] = None): Result = {
+  def check(timeout: Option[Int] = None, strategy: Option[String] = None): Result = {
     endPreamblePhase()
     setTimeout(timeout)
 

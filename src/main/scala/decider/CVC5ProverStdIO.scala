@@ -20,7 +20,7 @@ object Cvc5ProverStdIO {
   val exeEnvironmentalVariable = "CVC5_EXE"
   val dependencies: Seq[SilDefaultDependency] = Seq(SilDefaultDependency("cvc5", minVersion.version, "https://github.com/cvc5/cvc5"))
   val staticPreamble = "/cvc5config.smt2"
-  val startUpArgs: Seq[String] = Seq("--lang=smt2.6")
+  val startUpArgs: Seq[String] = Seq("--lang=smt2.6", "--use-portfolio")
   val randomizeSeedsOptions: Seq[String] = Seq("seed", "sat-random-seed")
 }
 

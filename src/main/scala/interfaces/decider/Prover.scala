@@ -38,12 +38,14 @@ trait ProverLike {
   def comment(content: String): Unit
   def saturate(timeout: Int, comment: String): Unit
   def saturate(data: Option[Config.ProverStateSaturationTimeout]): Unit
+
+  def startLog(): Unit
 }
 
 trait Prover extends ProverLike with StatefulComponent {
   def start(userArgsString: Option[String]): Unit
   def assert(goal: Term, timeout: Option[Int] = None): Boolean
-  def check(timeout: Option[Int] = None): Result
+  def check(timeout: Option[Int] = None, strategy: Option[String] = None): Result
   def fresh(id: String, argSorts: Seq[Sort], resultSort: Sort): Function
   def statistics(): Map[String, String]
   def hasModel(): Boolean
@@ -56,6 +58,7 @@ trait Prover extends ProverLike with StatefulComponent {
   def maxVersion: Option[Version]
   def version(): Version
   def staticPreamble: String
+  def unique(): String
   def randomizeSeedsOptions: Seq[String]
 
   def pushPopScopeDepth: Int
@@ -67,4 +70,6 @@ trait Prover extends ProverLike with StatefulComponent {
   def getAllDecls(): Seq[Decl]
 
   def getAllEmits(): Seq[String]
+
+  def getLog(): Option[Seq[String]]
 }

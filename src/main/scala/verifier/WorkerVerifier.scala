@@ -25,6 +25,7 @@ class WorkerVerifier(mainVerifier: MainVerifier,
   )
 
   def verificationPoolManager: VerificationPoolManager = mainVerifier.verificationPoolManager
+  def portfolioPoolManager: PortfolioPoolManager = mainVerifier.portfolioPoolManager
 
   override def openSymbExLogger(member: ast.Member): Unit = {
     symbExLog = mainVerifier.rootSymbExLogger.openMemberScope(member, decider.pcs)

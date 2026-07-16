@@ -42,6 +42,8 @@ class VerificationPoolManager(mainVerifier: MainVerifier) extends StatefulCompon
 
     override def setOption(name: String, value: String): String =
       (workerVerifiers map (_.decider.prover.setOption(name, value))).head
+
+    override def startLog(): Unit = workerVerifiers.foreach(_.decider.prover.startLog())
   }
 
   /* Verifier pool management */
@@ -132,7 +134,11 @@ class VerificationPoolManager(mainVerifier: MainVerifier) extends StatefulCompon
     var worker: WorkerVerifier = null
 
     override def onStart(): Unit = {
-      worker = workerVerifierPool.borrowObject()
+      try {
+        worker = workerVerifierPool.borrowObject()
+      } catch {
+        case _: InterruptedException =>
+      }
     }
 
     override def onTermination(exception: Throwable): Unit = {

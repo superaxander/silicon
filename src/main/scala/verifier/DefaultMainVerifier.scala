@@ -82,6 +82,9 @@ class DefaultMainVerifier(config: Config,
   private val _verificationPoolManager: VerificationPoolManager = new VerificationPoolManager(this)
   def verificationPoolManager: VerificationPoolManager = _verificationPoolManager
 
+  private val _portfolioPoolManager: PortfolioPoolManager = new PortfolioPoolManager
+  def portfolioPoolManager: PortfolioPoolManager = _portfolioPoolManager
+
   private val statefulSubcomponents = List[StatefulComponent](
     uniqueIdCounter,
     sequencesContributor, setsContributor, multisetsContributor, mapsContributor, domainsContributor,
@@ -89,6 +92,7 @@ class DefaultMainVerifier(config: Config,
     predSnapGenerator, predicateAndWandSnapFunctionsContributor,
     magicWandSnapFunctionsContributor,
     functionsSupporter, predicateSupporter,
+    _portfolioPoolManager,
     _verificationPoolManager,
     MultiRunRecorders /* In lieu of a better place, include MultiRunRecorders singleton here */
   )
@@ -161,6 +165,11 @@ class DefaultMainVerifier(config: Config,
       decider.prover.setOption(name, value)
       _verificationPoolManager.pooledVerifiers.setOption(name, value)
     }
+
+    override def startLog(): Unit = {
+      decider.prover.startLog()
+      _verificationPoolManager.pooledVerifiers.startLog()
+    }
   }
 
   /* Program verification */
@@ -211,6 +220,7 @@ class DefaultMainVerifier(config: Config,
     allProvers.comment("/" * 10 + " Static preamble")
     emitStaticPreamble(allProvers)
 
+    allProvers.startLog()
     val (functionData, predicateData) = analyzeProgramAndEmitPreambleContributions(program, allProvers) // TODO: Add support for cfgs.
 
     allProvers.comment("End preamble")
